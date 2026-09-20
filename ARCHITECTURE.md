@@ -10,21 +10,21 @@ About 2,500 lines total, one API project and one test project.
 
 ## 1. The translation table
 
-| Your usual stack | Here | Where |
-|---|---|---|
-| `Startup.cs` + `Program.cs` | One file, top-level statements, 47 lines | `Program.cs` |
-| `Controllers/WorkoutsController.cs` | `static class WorkoutEndpoints` with a `MapXxx` extension method | `Features/Workouts/WorkoutEndpoints.cs` |
-| `[HttpGet("{id}")]` attribute routing | `app.MapGet("/api/workouts/{id:long}", GetAsync)` | `WorkoutEndpoints.cs` |
-| `[Route("api/workouts")]` on the class | `app.MapGroup("/api/workouts")` | `ImportEndpoints.cs:10` |
-| `IActionResult` / `ActionResult<T>` | `IResult` | everywhere |
-| `Ok()`, `NotFound()`, `BadRequest()` | `Results.Ok()`, `Results.NotFound()`, … | |
-| `ModelState.IsValid` + `[ApiController]` | Nothing automatic — the handler calls the validator | `ImportEndpoints.cs:51` |
-| `Core` / `Domain` / `Infrastructure` projects | One project, `Features/` folders | |
-| `IWorkoutRepository` + impl + mock | Concrete `WorkoutRepository`, no interface | |
-| `DbContext`, `DbSet<T>`, LINQ | `IDbConnectionFactory` + SQL strings | `Persistence/` |
-| EF migrations | `Schema.sql` run at startup | `Persistence/DatabaseInitializer.cs` |
-| `ServiceCollectionExtensions` per module | 12 lines in `Program.cs` | `Program.cs:13-26` |
-| Mocked unit tests | `WebApplicationFactory` against real SQLite | `tests/ApiFactory.cs` |
+| Your usual stack                              | Here                                                             | Where                                   |
+| --------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------- |
+| `Startup.cs` + `Program.cs`                   | One file, top-level statements, 47 lines                         | `Program.cs`                            |
+| `Controllers/WorkoutsController.cs`           | `static class WorkoutEndpoints` with a `MapXxx` extension method | `Features/Workouts/WorkoutEndpoints.cs` |
+| `[HttpGet("{id}")]` attribute routing         | `app.MapGet("/api/workouts/{id:long}", GetAsync)`                | `WorkoutEndpoints.cs`                   |
+| `[Route("api/workouts")]` on the class        | `app.MapGroup("/api/workouts")`                                  | `ImportEndpoints.cs:10`                 |
+| `IActionResult` / `ActionResult<T>`           | `IResult`                                                        | everywhere                              |
+| `Ok()`, `NotFound()`, `BadRequest()`          | `Results.Ok()`, `Results.NotFound()`, …                          |                                         |
+| `ModelState.IsValid` + `[ApiController]`      | Nothing automatic — the handler calls the validator              | `ImportEndpoints.cs:51`                 |
+| `Core` / `Domain` / `Infrastructure` projects | One project, `Features/` folders                                 |                                         |
+| `IWorkoutRepository` + impl + mock            | Concrete `WorkoutRepository`, no interface                       |                                         |
+| `DbContext`, `DbSet<T>`, LINQ                 | `IDbConnectionFactory` + SQL strings                             | `Persistence/`                          |
+| EF migrations                                 | `Schema.sql` run at startup                                      | `Persistence/DatabaseInitializer.cs`    |
+| `ServiceCollectionExtensions` per module      | 12 lines in `Program.cs`                                         | `Program.cs:13-26`                      |
+| Mocked unit tests                             | `WebApplicationFactory` against real SQLite                      | `tests/ApiFactory.cs`                   |
 
 ## 2. Start by reading `Program.cs` top to bottom
 
@@ -48,13 +48,13 @@ This is where MVC habits get burned. There are **no `[FromBody]`,
 `[FromQuery]`, `[FromRoute]` or `[FromServices]` attributes.** Binding is by
 convention:
 
-| Parameter | Binds from |
-|---|---|
-| Name matches a `{token}` in the route template | Route |
-| Type is registered in DI | Services |
-| Simple type (`string`, `int`, `DateOnly`, `bool`, `Guid`…) not in the route | **Query string** |
-| Complex type not in DI | **JSON body** (at most one) |
-| `CancellationToken`, `HttpContext`, `ClaimsPrincipal`, `Stream` | Special-cased |
+| Parameter                                                                   | Binds from                  |
+| --------------------------------------------------------------------------- | --------------------------- |
+| Name matches a `{token}` in the route template                              | Route                       |
+| Type is registered in DI                                                    | Services                    |
+| Simple type (`string`, `int`, `DateOnly`, `bool`, `Guid`…) not in the route | **Query string**            |
+| Complex type not in DI                                                      | **JSON body** (at most one) |
+| `CancellationToken`, `HttpContext`, `ClaimsPrincipal`, `Stream`             | Special-cased               |
 
 Every one of those appears in one real signature, `ImportEndpoints.cs:21`:
 
@@ -122,7 +122,7 @@ mutable state and are safely Singleton.
 existing pattern will not warn you.
 
 One class deliberately escapes DI: `ExerciseResolver`. It holds a per-request
-lookup cache and needs the *caller's* open transaction, so it is constructed
+lookup cache and needs the _caller's_ open transaction, so it is constructed
 inside `WorkoutImportService` rather than injected. If you see a class
 instantiated directly, check whether it holds state or needs a transaction —
 that is usually the reason.
@@ -143,14 +143,14 @@ so tests can point at a different file, not so it can be faked.
 
 ## 7. Dapper vs EF Core
 
-| EF Core habit | Here |
-|---|---|
-| `_db.Workouts.Include(w => w.Sets)` | Write the JOIN, group in memory — see `WorkoutRepository.GetAsync` |
-| Change tracking, `SaveChanges()` | Every write is an explicit `INSERT`/`UPDATE` that runs immediately |
-| Navigation properties | None. Rows are flat; you shape them |
-| `IQueryable` composition | SQL strings with `(@param IS NULL OR col = @param)` for optional filters |
-| Implicit transaction per `SaveChanges` | Explicit `BeginTransaction()` / `Commit()` |
-| `Add-Migration` | Edit `Schema.sql`, delete the `.db`, re-import |
+| EF Core habit                          | Here                                                                     |
+| -------------------------------------- | ------------------------------------------------------------------------ |
+| `_db.Workouts.Include(w => w.Sets)`    | Write the JOIN, group in memory — see `WorkoutRepository.GetAsync`       |
+| Change tracking, `SaveChanges()`       | Every write is an explicit `INSERT`/`UPDATE` that runs immediately       |
+| Navigation properties                  | None. Rows are flat; you shape them                                      |
+| `IQueryable` composition               | SQL strings with `(@param IS NULL OR col = @param)` for optional filters |
+| Implicit transaction per `SaveChanges` | Explicit `BeginTransaction()` / `Commit()`                               |
+| `Add-Migration`                        | Edit `Schema.sql`, delete the `.db`, re-import                           |
 
 The optional-filter idiom is everywhere and worth internalizing:
 
@@ -238,14 +238,3 @@ and the error path builds itself.
 
 **Change the schema.** Edit `Schema.sql`, delete the `.db`, restart. No
 migration to generate — and no versioning, so existing data is lost.
-
-## 12. What is deliberately absent
-
-Not here, on purpose: MediatR, AutoMapper, repository interfaces, a `Domain`
-project, EF Core, migrations, auth, a shared class library, action filters.
-
-Nothing blocks adding any of them, but at ~2,500 lines most of that ceremony
-pays off at a scale this is not at.
-
-The one worth reconsidering first if this grows: automatic validation via an
-endpoint filter, so handlers stop calling the validator by hand.
