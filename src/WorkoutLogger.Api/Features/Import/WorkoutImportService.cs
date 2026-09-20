@@ -72,8 +72,7 @@ public sealed class WorkoutImportService
 
             // Appending to an existing workout must continue its ordering, not restart at 1.
             var position = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
-                "SELECT COALESCE(MAX(Position), 0) FROM WorkoutExercise WHERE WorkoutId = @workoutId;",
-                new { workoutId }, transaction, cancellationToken: ct));
+                ImportSql.SelectMaxPosition, new { workoutId }, transaction, cancellationToken: ct));
 
             foreach (var exercise in workout.Exercises!)
             {
@@ -104,11 +103,7 @@ public sealed class WorkoutImportService
         }
 
         await connection.ExecuteAsync(new CommandDefinition(
-            """
-            UPDATE ImportBatch
-            SET ExercisesImported = @imported, ExercisesSkipped = @skippedCount, Status = 'Accepted'
-            WHERE Id = @batchId;
-            """,
+            ImportSql.UpdateBatchTotals,
             new { imported, skippedCount = skipped.Count, batchId }, transaction, cancellationToken: ct));
 
         transaction.Commit();
@@ -130,18 +125,9 @@ public sealed class WorkoutImportService
         SqliteConnection connection, SqliteTransaction transaction,
         string source, string payloadHash, int workoutsReceived, string now, CancellationToken ct)
     {
-        // Inserted up front with zero counts because WorkoutExercise carries an
-        // FK to it; the totals are written back once the batch has been walked.
-        const string sql =
-            """
-            INSERT INTO ImportBatch
-                (ReceivedAtUtc, SourceName, PayloadHash, WorkoutsReceived, ExercisesImported, ExercisesSkipped, Status)
-            VALUES (@now, @source, @payloadHash, @workoutsReceived, 0, 0, 'Pending')
-            RETURNING Id;
-            """;
-
         return await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            sql, new { now, source, payloadHash, workoutsReceived }, transaction, cancellationToken: ct));
+            ImportSql.InsertBatch,
+            new { now, source, payloadHash, workoutsReceived }, transaction, cancellationToken: ct));
     }
 
     private static async Task<(long WorkoutId, bool WasCreated)> FindOrCreateWorkoutAsync(
@@ -149,7 +135,7 @@ public sealed class WorkoutImportService
         string performedOn, string? label, string source, string now, CancellationToken ct)
     {
         var existing = await connection.ExecuteScalarAsync<long?>(new CommandDefinition(
-            "SELECT Id FROM Workout WHERE PerformedOn = @performedOn AND COALESCE(Label, '') = COALESCE(@label, '');",
+            ImportSql.FindWorkoutByDateAndLabel,
             new { performedOn, label }, transaction, cancellationToken: ct));
 
         if (existing is not null)
@@ -157,15 +143,8 @@ public sealed class WorkoutImportService
             return (existing.Value, false);
         }
 
-        const string insert =
-            """
-            INSERT INTO Workout (ExternalId, PerformedOn, Label, Notes, SourceName, CreatedAtUtc)
-            VALUES (@externalId, @performedOn, @label, @notes, @source, @now)
-            RETURNING Id;
-            """;
-
         var id = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            insert,
+            ImportSql.InsertWorkout,
             new { externalId = workout.ExternalId, performedOn, label, notes = workout.Notes, source, now },
             transaction, cancellationToken: ct));
 
@@ -177,20 +156,8 @@ public sealed class WorkoutImportService
         long workoutId, long exerciseId, int position, WorkoutExerciseDto exercise,
         long batchId, string now, CancellationToken ct)
     {
-        // ON CONFLICT DO NOTHING turns the UNIQUE(WorkoutId, ExerciseId) dedupe
-        // into a null result rather than an exception, so a repeat import is a
-        // reportable skip instead of a failure.
-        const string sql =
-            """
-            INSERT INTO WorkoutExercise
-                (WorkoutId, ExerciseId, Position, RawExerciseName, Notes, ImportBatchId, CreatedAtUtc)
-            VALUES (@workoutId, @exerciseId, @position, @rawName, @notes, @batchId, @now)
-            ON CONFLICT (WorkoutId, ExerciseId) DO NOTHING
-            RETURNING Id;
-            """;
-
         return await connection.ExecuteScalarAsync<long?>(new CommandDefinition(
-            sql,
+            ImportSql.InsertWorkoutExercise,
             new { workoutId, exerciseId, position, rawName = exercise.Name!.Trim(), notes = exercise.Notes, batchId, now },
             transaction, cancellationToken: ct));
     }
@@ -199,13 +166,6 @@ public sealed class WorkoutImportService
         SqliteConnection connection, SqliteTransaction transaction,
         long workoutExerciseId, WorkoutExerciseDto exercise, string now, CancellationToken ct)
     {
-        const string sql =
-            """
-            INSERT INTO WorkoutSet
-                (WorkoutExerciseId, SetNumber, Reps, Weight, WeightUnit, Rpe, IsWarmup, CreatedAtUtc)
-            VALUES (@workoutExerciseId, @setNumber, @reps, @weight, @weightUnit, @rpe, @isWarmup, @now);
-            """;
-
         var setNumber = 0;
         var rows = exercise.Sets!.Select(set => new
         {
@@ -222,7 +182,8 @@ public sealed class WorkoutImportService
             now
         }).ToList();
 
-        await connection.ExecuteAsync(new CommandDefinition(sql, rows, transaction, cancellationToken: ct));
+        await connection.ExecuteAsync(new CommandDefinition(
+            ImportSql.InsertWorkoutSet, rows, transaction, cancellationToken: ct));
     }
 
     private static string HashPayload(ImportBatchRequest request)

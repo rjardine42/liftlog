@@ -52,21 +52,8 @@ public sealed class ExerciseResolver
 
     private async Task<ResolvedExercise?> LookupAsync(string normalized, CancellationToken ct)
     {
-        const string sql =
-            """
-            SELECT e.Id, e.CanonicalName
-            FROM ExerciseAlias a
-            JOIN Exercise e ON e.Id = a.ExerciseId
-            WHERE a.NormalizedAlias = @normalized
-            UNION ALL
-            SELECT e.Id, e.CanonicalName
-            FROM Exercise e
-            WHERE e.NormalizedName = @normalized
-            LIMIT 1;
-            """;
-
-        var row = await _connection.QuerySingleOrDefaultAsync<ExerciseRow>(
-            new CommandDefinition(sql, new { normalized }, _transaction, cancellationToken: ct));
+        var row = await _connection.QuerySingleOrDefaultAsync<ExerciseRow>(new CommandDefinition(
+            ExerciseSql.ResolveByAliasOrName, new { normalized }, _transaction, cancellationToken: ct));
 
         return row is null ? null : new ResolvedExercise(row.Id, row.CanonicalName, false);
     }
@@ -75,15 +62,8 @@ public sealed class ExerciseResolver
 
     private async Task<ResolvedExercise> CreateUnresolvedAsync(string rawName, string normalized, CancellationToken ct)
     {
-        const string sql =
-            """
-            INSERT INTO Exercise (CanonicalName, NormalizedName, IsUnresolved, CreatedAtUtc)
-            VALUES (@rawName, @normalized, 1, @createdAtUtc)
-            RETURNING Id;
-            """;
-
         var id = await _connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            sql,
+            ExerciseSql.InsertUnresolved,
             new { rawName, normalized, createdAtUtc = Clock.UtcNowIso() },
             _transaction,
             cancellationToken: ct));

@@ -32,21 +32,10 @@ public sealed class ExerciseRepository
 
     public async Task<IReadOnlyList<ExerciseSummary>> ListAsync(bool unresolvedOnly, CancellationToken ct)
     {
-        const string sql =
-            """
-            SELECT e.Id, e.CanonicalName, e.MuscleGroup, e.Modality, e.IsUnresolved,
-                   COUNT(we.Id) AS TimesLogged
-            FROM Exercise e
-            LEFT JOIN WorkoutExercise we ON we.ExerciseId = e.Id
-            WHERE (@unresolvedOnly = 0 OR e.IsUnresolved = 1)
-            GROUP BY e.Id
-            ORDER BY e.CanonicalName;
-            """;
-
         using var connection = _connectionFactory.Create();
 
         var rows = await connection.QueryAsync<ExerciseSummary>(new CommandDefinition(
-            sql, new { unresolvedOnly = unresolvedOnly ? 1 : 0 }, cancellationToken: ct));
+            ExerciseSql.List, new { unresolvedOnly = unresolvedOnly ? 1 : 0 }, cancellationToken: ct));
 
         return rows.ToList();
     }
@@ -58,7 +47,7 @@ public sealed class ExerciseRepository
         using var connection = _connectionFactory.Create();
 
         var exists = await connection.ExecuteScalarAsync<long?>(new CommandDefinition(
-            "SELECT Id FROM Exercise WHERE Id = @exerciseId;", new { exerciseId }, cancellationToken: ct));
+            ExerciseSql.ExistsById, new { id = exerciseId }, cancellationToken: ct));
 
         if (exists is null)
         {
@@ -66,10 +55,7 @@ public sealed class ExerciseRepository
         }
 
         await connection.ExecuteAsync(new CommandDefinition(
-            """
-            INSERT OR IGNORE INTO ExerciseAlias (ExerciseId, NormalizedAlias, RawAlias, CreatedAtUtc)
-            VALUES (@exerciseId, @normalized, @alias, @now);
-            """,
+            ExerciseSql.InsertAlias,
             new { exerciseId, normalized, alias = alias.Trim(), now = Clock.UtcNowIso() },
             cancellationToken: ct));
 
@@ -99,8 +85,7 @@ public sealed class ExerciseRepository
         using var transaction = connection.BeginTransaction();
 
         var source = await connection.QuerySingleOrDefaultAsync<ExerciseNames>(new CommandDefinition(
-            "SELECT CanonicalName, NormalizedName FROM Exercise WHERE Id = @sourceId;",
-            new { sourceId }, transaction, cancellationToken: ct));
+            ExerciseSql.SelectNamesById, new { sourceId }, transaction, cancellationToken: ct));
 
         if (source is null)
         {
@@ -108,7 +93,7 @@ public sealed class ExerciseRepository
         }
 
         var targetExists = await connection.ExecuteScalarAsync<long?>(new CommandDefinition(
-            "SELECT Id FROM Exercise WHERE Id = @targetId;", new { targetId }, transaction, cancellationToken: ct));
+            ExerciseSql.ExistsById, new { id = targetId }, transaction, cancellationToken: ct));
 
         if (targetExists is null)
         {
@@ -118,50 +103,23 @@ public sealed class ExerciseRepository
         // 1. Workouts holding both: append the source sets to the target block,
         //    offsetting SetNumber past whatever is already there.
         await connection.ExecuteAsync(new CommandDefinition(
-            """
-            UPDATE WorkoutSet AS s
-            SET WorkoutExerciseId = m.TargetBlockId,
-                SetNumber         = s.SetNumber + m.SetOffset
-            FROM (
-                SELECT src.Id AS SourceBlockId,
-                       tgt.Id AS TargetBlockId,
-                       (SELECT COALESCE(MAX(x.SetNumber), 0) FROM WorkoutSet x WHERE x.WorkoutExerciseId = tgt.Id) AS SetOffset
-                FROM WorkoutExercise src
-                JOIN WorkoutExercise tgt ON tgt.WorkoutId = src.WorkoutId AND tgt.ExerciseId = @targetId
-                WHERE src.ExerciseId = @sourceId
-            ) AS m
-            WHERE s.WorkoutExerciseId = m.SourceBlockId;
-            """,
+            ExerciseSql.MergeAppendSetsToTargetBlock,
             new { sourceId, targetId }, transaction, cancellationToken: ct));
 
         // 2. Drop the now-empty source blocks from those same workouts.
         await connection.ExecuteAsync(new CommandDefinition(
-            """
-            DELETE FROM WorkoutExercise
-            WHERE ExerciseId = @sourceId
-              AND EXISTS (
-                  SELECT 1 FROM WorkoutExercise t
-                  WHERE t.WorkoutId = WorkoutExercise.WorkoutId AND t.ExerciseId = @targetId);
-            """,
+            ExerciseSql.MergeDeleteEmptySourceBlocks,
             new { sourceId, targetId }, transaction, cancellationToken: ct));
 
         // 3. Everything left can simply be repointed.
         await connection.ExecuteAsync(new CommandDefinition(
-            "UPDATE WorkoutExercise SET ExerciseId = @targetId WHERE ExerciseId = @sourceId;",
+            ExerciseSql.MergeRepointRemainingBlocks,
             new { sourceId, targetId }, transaction, cancellationToken: ct));
 
         // 4. Carry the aliases over, then make the source's own name an alias so the
-        //    spelling that caused this resolves correctly next time. OR IGNORE covers
-        //    an alias the target already holds.
+        //    spelling that caused this resolves correctly next time.
         await connection.ExecuteAsync(new CommandDefinition(
-            """
-            UPDATE OR IGNORE ExerciseAlias SET ExerciseId = @targetId WHERE ExerciseId = @sourceId;
-
-            INSERT OR IGNORE INTO ExerciseAlias (ExerciseId, NormalizedAlias, RawAlias, CreatedAtUtc)
-            VALUES (@targetId, @normalizedName, @canonicalName, @now);
-
-            DELETE FROM Exercise WHERE Id = @sourceId;
-            """,
+            ExerciseSql.MergeCarryAliasesAndDeleteSource,
             new
             {
                 sourceId,

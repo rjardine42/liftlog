@@ -223,9 +223,17 @@ The only non-obvious hop is 1 → 2, which the grep in §4 solves.
 
 ## 11. Recipes
 
-**Add a read endpoint.** Method on `WorkoutRepository` (SQL plus a row type
-with init properties) → private handler in `WorkoutEndpoints` → one `MapGet`
-line. No DI change; the repository is already registered.
+**Add a read endpoint.** `const string` in `WorkoutSql` → method on
+`WorkoutRepository` that passes it, plus a row type with init properties →
+private handler in `WorkoutEndpoints` → one `MapGet` line. No DI change; the
+repository is already registered.
+
+**Where the SQL lives.** Every statement under `Features/` sits in that
+feature's `*Sql.cs` — `ExerciseSql`, `WorkoutSql`, `ImportSql`, `AnalyticsSql` —
+as a `const string`, not inline at the call site. Reading a feature's queries as
+a set means opening one file. `AnalyticsSql.EstimatedOneRepMax` is the one
+exception to plain constants: it is a `string.Format` template whose `{0}` takes
+one of the `Bucket*` fragments.
 
 **Add an analytics metric.** Implement `IWorkoutMetric`, then add
 `builder.Services.AddWorkoutMetric<YourMetric>();` to `Program.cs`. It appears

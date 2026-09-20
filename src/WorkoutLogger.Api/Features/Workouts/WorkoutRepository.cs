@@ -56,25 +56,10 @@ public sealed class WorkoutRepository
     public async Task<IReadOnlyList<WorkoutSummary>> ListAsync(
         DateOnly? from, DateOnly? to, int page, int pageSize, CancellationToken ct)
     {
-        const string sql =
-            """
-            SELECT w.Id, w.PerformedOn, w.Label, w.Notes,
-                   COUNT(DISTINCT we.Id) AS ExerciseCount,
-                   COUNT(s.Id)           AS SetCount
-            FROM Workout w
-            LEFT JOIN WorkoutExercise we ON we.WorkoutId = w.Id
-            LEFT JOIN WorkoutSet s       ON s.WorkoutExerciseId = we.Id
-            WHERE (@from IS NULL OR w.PerformedOn >= @from)
-              AND (@to   IS NULL OR w.PerformedOn <= @to)
-            GROUP BY w.Id
-            ORDER BY w.PerformedOn DESC, w.Id DESC
-            LIMIT @pageSize OFFSET @offset;
-            """;
-
         using var connection = _connectionFactory.Create();
 
         var rows = await connection.QueryAsync<WorkoutSummary>(new CommandDefinition(
-            sql,
+            WorkoutSql.ListSummaries,
             new { from = Iso(from), to = Iso(to), pageSize, offset = (page - 1) * pageSize },
             cancellationToken: ct));
 
@@ -86,27 +71,15 @@ public sealed class WorkoutRepository
         using var connection = _connectionFactory.Create();
 
         var header = await connection.QuerySingleOrDefaultAsync<WorkoutHeader>(new CommandDefinition(
-            "SELECT Id, PerformedOn, Label, Notes, SourceName FROM Workout WHERE Id = @id;",
-            new { id }, cancellationToken: ct));
+            WorkoutSql.SelectHeaderById, new { id }, cancellationToken: ct));
 
         if (header is null)
         {
             return null;
         }
 
-        const string sql =
-            """
-            SELECT we.ExerciseId, e.CanonicalName AS Exercise, we.RawExerciseName AS RawName,
-                   we.Position, we.Notes,
-                   s.SetNumber, s.Reps, s.Weight, s.WeightUnit AS Unit, s.Rpe, s.IsWarmup
-            FROM WorkoutExercise we
-            JOIN Exercise e    ON e.Id = we.ExerciseId
-            LEFT JOIN WorkoutSet s ON s.WorkoutExerciseId = we.Id
-            WHERE we.WorkoutId = @id
-            ORDER BY we.Position, s.SetNumber;
-            """;
-
-        var rows = await connection.QueryAsync<BlockRow>(new CommandDefinition(sql, new { id }, cancellationToken: ct));
+        var rows = await connection.QueryAsync<BlockRow>(new CommandDefinition(
+            WorkoutSql.SelectExerciseBlocks, new { id }, cancellationToken: ct));
 
         var exercises = rows
             .GroupBy(r => new { r.ExerciseId, r.Exercise, r.RawName, r.Position, r.Notes })
@@ -123,25 +96,10 @@ public sealed class WorkoutRepository
     public async Task<IReadOnlyList<FlatSet>> ListSetsAsync(
         long? exerciseId, DateOnly? from, DateOnly? to, bool includeWarmups, CancellationToken ct)
     {
-        const string sql =
-            """
-            SELECT w.PerformedOn, w.Id AS WorkoutId, we.ExerciseId, e.CanonicalName AS Exercise,
-                   s.SetNumber, s.Reps, s.Weight, s.WeightUnit AS Unit, s.Rpe, s.IsWarmup
-            FROM WorkoutSet s
-            JOIN WorkoutExercise we ON we.Id = s.WorkoutExerciseId
-            JOIN Workout w          ON w.Id = we.WorkoutId
-            JOIN Exercise e         ON e.Id = we.ExerciseId
-            WHERE (@exerciseId IS NULL OR we.ExerciseId = @exerciseId)
-              AND (@from IS NULL OR w.PerformedOn >= @from)
-              AND (@to   IS NULL OR w.PerformedOn <= @to)
-              AND (@includeWarmups = 1 OR s.IsWarmup = 0)
-            ORDER BY w.PerformedOn, w.Id, we.Position, s.SetNumber;
-            """;
-
         using var connection = _connectionFactory.Create();
 
         var rows = await connection.QueryAsync<FlatSet>(new CommandDefinition(
-            sql,
+            WorkoutSql.ListFlatSets,
             new { exerciseId, from = Iso(from), to = Iso(to), includeWarmups = includeWarmups ? 1 : 0 },
             cancellationToken: ct));
 
