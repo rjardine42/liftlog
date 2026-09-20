@@ -1,0 +1,32 @@
+info:
+  name: Unresolved after merge
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/exercises/unresolved"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("the merged entry is gone from the backlog", function() {
+          const mystery = res.body.find(e => e.canonicalName === "Mystery Lift " + bru.getVar("runId"));
+          expect(mystery, "should have been merged away").to.be.undefined;
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  The backlog is clear for this run. Entries from earlier runs or your own
+  imports may still be listed.

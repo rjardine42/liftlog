@@ -1,0 +1,45 @@
+{
+  "source": "manual-backfill",
+  "workouts": [
+    {
+      "performedOn": "2026-09-14",
+      "exercises": [
+        {
+          "name": "squat",
+          "rpe": 8,
+          "sets": [
+            { "reps": 5, "weight": 225 },
+            { "reps": 5, "weight": 245 },
+            { "reps": 3, "weight": 265, "rpe": 9 }
+          ]
+        },
+        {
+          "name": "rdl",
+          "sets": [
+            { "reps": 8, "weight": 185, "rpe": 7 },
+            { "reps": 8, "weight": 205, "rpe": 8 }
+          ]
+        }
+      ]
+    },
+    {
+      "performedOn": "2026-09-16",
+      "exercises": [
+        {
+          "name": "bench",
+          "sets": [
+            { "reps": 8, "weight": 180, "rpe": 7 },
+            { "reps": 8, "weight": 180, "rpe": 8 }
+          ]
+        },
+        {
+          "name": "Pendlay Row",
+          "notes": "not in the catalogue yet - lands as unresolved",
+          "sets": [
+            { "reps": 8, "weight": 135, "rpe": 8 }
+          ]
+        }
+      ]
+    }
+  ]
+}

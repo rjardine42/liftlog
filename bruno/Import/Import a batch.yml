@@ -1,0 +1,99 @@
+info:
+  name: Import a batch
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/workouts/batch"
+  body:
+    type: json
+    data: |-
+      {
+        "source": "manual-backfill",
+        "workouts": [
+          {
+            "performedOn": "{{batchDateA}}",
+            "exercises": [
+              {
+                "name": "squat",
+                "rpe": 8,
+                "sets": [
+                  { "reps": 5, "weight": 225 },
+                  { "reps": 5, "weight": 245 },
+                  { "reps": 3, "weight": 265, "rpe": 9 }
+                ]
+              },
+              {
+                "name": "rdl",
+                "sets": [
+                  { "reps": 8, "weight": 185, "rpe": 7 },
+                  { "reps": 8, "weight": 205, "rpe": 8 }
+                ]
+              }
+            ]
+          },
+          {
+            "performedOn": "{{batchDateB}}",
+            "exercises": [
+              {
+                "name": "bench",
+                "sets": [
+                  { "reps": 8, "weight": 180, "rpe": 7 },
+                  { "reps": 8, "weight": 180, "rpe": 8 }
+                ]
+              },
+              {
+                "name": "Mystery Lift {{runId}}",
+                "notes": "not in the catalogue - lands as unresolved",
+                "sets": [
+                  { "reps": 8, "weight": 135, "rpe": 8 }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Handed to the Exercises folder, which maps it onto a real exercise.
+        if (res.body.unresolvedExercises && res.body.unresolvedExercises.length > 0) {
+          bru.setVar("unresolvedExerciseId", res.body.unresolvedExercises[0].exerciseId);
+        }
+    - type: tests
+      code: |-
+        test("the unknown lift is reported rather than silently dropped", function() {
+          expect(res.body.unresolvedExercises).to.have.lengthOf(1);
+          expect(res.body.unresolvedExercises[0].name).to.equal("Mystery Lift " + bru.getVar("runId"));
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+    - expression: res.body.workoutsReceived
+      operator: eq
+      value: "2"
+    - expression: res.body.workoutsCreated
+      operator: eq
+      value: "2"
+    - expression: res.body.exercisesImported
+      operator: eq
+      value: "4"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  Several whole workouts in one call — the backfill path.
+
+  `"squat"`, `"rdl"` and `"bench"` all resolve through aliases.
+  `"Mystery Lift ..."` matches nothing, so it is stored, flagged unresolved and
+  returned in `unresolvedExercises`. **An unrecognised name never fails the
+  import** — you fix it afterwards in the Exercises folder.

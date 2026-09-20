@@ -1,0 +1,47 @@
+info:
+  name: List exercises
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/exercises"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const row = res.body.find(e => e.canonicalName === "Barbell Row");
+
+        if (row) {
+          bru.setVar("barbellRowId", row.id);
+        }
+    - type: tests
+      code: |-
+        test("the seeded catalogue is present", function() {
+          expect(res.body.length).to.be.at.least(34);
+        });
+
+        test("aliases resolved onto catalogue entries, not new ones", function() {
+          const squat = res.body.find(e => e.canonicalName === "Barbell Back Squat");
+          expect(squat.isUnresolved).to.equal(false);
+          expect(squat.timesLogged).to.be.at.least(1);
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  The canonical catalogue, with `timesLogged` so you can see what actually gets
+  used. `isUnresolved: true` marks names created by an import that matched
+  nothing.
+
+  Captures `barbellRowId` for the merge request.

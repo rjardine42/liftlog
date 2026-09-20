@@ -1,0 +1,54 @@
+info:
+  name: Add an exercise to the same date
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/workouts"
+  body:
+    type: json
+    data: |-
+      {
+        "performedOn": "{{sessionDate}}",
+        "exercises": [
+          {
+            "name": "lateral raises",
+            "rpe": 9,
+            "sets": [
+              { "reps": 15, "weight": 20 },
+              { "reps": 15, "weight": 20 }
+            ]
+          }
+        ]
+      }
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+    - expression: res.body.workoutsCreated
+      operator: eq
+      value: "0"
+    - expression: res.body.workoutsMatched
+      operator: eq
+      value: "1"
+    - expression: res.body.exercisesImported
+      operator: eq
+      value: "1"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  **Find-or-create by date.** A different exercise on a date that already exists
+  attaches to that workout instead of creating a second one — note
+  `workoutsCreated: 0, workoutsMatched: 1`.
+
+  So you can log a session in pieces as you go, and "Get workout" will still
+  show one workout with all four exercises.

@@ -1,0 +1,66 @@
+info:
+  name: Estimated 1RM by week
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/analytics/e1rm?bucket=week&from={{batchDateA}}&to={{sessionDate}}"
+  params:
+    - name: bucket
+      value: week
+      type: query
+    - name: from
+      value: "{{batchDateA}}"
+      type: query
+    - name: to
+      value: "{{sessionDate}}"
+      type: query
+    - name: exerciseId
+      value: "{{benchPressId}}"
+      type: query
+      disabled: true
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("returns a bucketed series", function() {
+          expect(res.body.points.length).to.be.at.least(1);
+          res.body.points.forEach(p => {
+            expect(p.bucket).to.match(/^\d{4}-\d{2}-\d{2}$/);
+            expect(p.sampleCount).to.be.at.least(1);
+          });
+        });
+
+        test("the best lift of the block is the 265x3 squat", function() {
+          const best = Math.max(...res.body.points.map(p => p.value));
+          expect(best).to.be.closeTo(291.5, 0.01);   // 265 * (1 + 3/30)
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+    - expression: res.body.key
+      operator: eq
+      value: e1rm
+    - expression: res.body.unit
+      operator: eq
+      value: lb
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  Epley estimated 1RM (`weight x (1 + reps / 30)`), best per bucket.
+
+  Weeks start Monday. `bucket` also takes `day` and `month`; leave it off and
+  you get weeks.
+
+  `sampleCount` tells you how many sets fed a point — useful for telling a real
+  trend from one lucky single. Warmups and bodyweight sets are excluded, since
+  neither says anything about a maximum.

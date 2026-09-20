@@ -1,0 +1,63 @@
+info:
+  name: Sets (flat)
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/sets?from={{batchDateA}}&to={{sessionDate}}"
+  params:
+    - name: from
+      value: "{{batchDateA}}"
+      type: query
+    - name: to
+      value: "{{sessionDate}}"
+      type: query
+    - name: exerciseId
+      value: "{{benchPressId}}"
+      type: query
+      disabled: true
+    - name: includeWarmups
+      value: "true"
+      type: query
+      disabled: true
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const bench = res.body.find(s => s.exercise === "Barbell Bench Press");
+
+        if (bench) {
+          bru.setVar("benchPressId", bench.exerciseId);
+        }
+    - type: tests
+      code: |-
+        test("warmups are excluded by default", function() {
+          expect(res.body.every(s => s.isWarmup === false)).to.be.true;
+        });
+
+        test("one row per working set, in date order", function() {
+          // 10 on the session date + 5 + 3 across the two batch days, warmup excluded
+          expect(res.body).to.have.lengthOf(18);
+          const dates = res.body.map(s => s.performedOn);
+          expect(dates).to.deep.equal([...dates].sort());
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  **The endpoint to point a frontend or a notebook at.** One flat row per set:
+  date, exercise, reps, weight, unit, RPE — no nesting to walk.
+
+  Warmups are left out unless you ask for them. Enable the greyed-out params to
+  try `exerciseId` (captured here as `benchPressId`) and `includeWarmups`.

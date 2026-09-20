@@ -1,0 +1,33 @@
+info:
+  name: Merge into a canonical exercise
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/exercises/{{unresolvedExerciseId}}/merge-into/{{barbellRowId}}"
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "204"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  Folds the unresolved "Mystery Lift" into **Barbell Row**. Three things happen:
+
+  1. Sets already logged against it are repointed to Barbell Row.
+  2. Its name becomes an alias, so that spelling resolves by itself next time.
+  3. The unresolved row is deleted.
+
+  If a workout happened to contain both exercises, the sets are combined into
+  one block and renumbered rather than colliding.
+
+  The next two requests confirm 1 and 3.

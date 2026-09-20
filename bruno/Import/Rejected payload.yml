@@ -1,0 +1,59 @@
+info:
+  name: Rejected payload
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/workouts"
+  body:
+    type: json
+    data: |-
+      {
+        "performedOn": "{{sessionDate}}",
+        "exercises": [
+          {
+            "name": "bench",
+            "sets": [
+              { "reps": 0, "weight": -5, "unit": "kg", "rpe": 11 }
+            ]
+          }
+        ]
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("every problem is reported at once", function() {
+          const keys = Object.keys(res.body.errors);
+          expect(keys).to.include("exercises[0].sets[0].reps");
+          expect(keys).to.include("exercises[0].sets[0].weight");
+          expect(keys).to.include("exercises[0].sets[0].unit");
+          expect(keys).to.include("exercises[0].sets[0].rpe");
+        });
+
+        test("error paths match the payload that was sent", function() {
+          Object.keys(res.body.errors).forEach(k => expect(k).to.match(/^exercises\[/));
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "400"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  **Validate-first, all-or-nothing.** Four things are wrong and all four come
+  back together, so you fix the file once rather than discovering problems one
+  request at a time. Nothing is written — re-run "List workouts" and this date
+  is unchanged.
+
+  Note `unit: "kg"` is an error, not a silent conversion. Only `lb` is supported
+  today, and storing a kg number as if it were lb is the kind of mistake that is
+  expensive to find months later.

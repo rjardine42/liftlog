@@ -1,0 +1,98 @@
+info:
+  name: Import workout
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/workouts"
+  body:
+    type: json
+    data: |-
+      {
+        "performedOn": "{{sessionDate}}",
+        "notes": "Push day",
+        "exercises": [
+          {
+            "name": "Barbell Bench Press",
+            "notes": "paused reps",
+            "sets": [
+              { "reps": 10, "weight": 95, "isWarmup": true },
+              { "reps": 8, "weight": 185, "rpe": 7.5 },
+              { "reps": 6, "weight": 195, "rpe": 9 }
+            ]
+          },
+          {
+            "name": "ohp",
+            "rpe": 8,
+            "sets": [
+              { "reps": 8, "weight": 95 },
+              { "reps": 8, "weight": 95 },
+              { "reps": 6, "weight": 105, "rpe": 9 }
+            ]
+          },
+          {
+            "name": "Triceps Pushdown",
+            "rpe": 8.5,
+            "sets": [
+              { "reps": 12, "weight": 50 },
+              { "reps": 12, "weight": 50 },
+              { "reps": 10, "weight": 60 }
+            ]
+          }
+        ]
+      }
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // Start of a run: pick a date and id nothing else has used, so the dedupe and
+        // unresolved-exercise requests downstream behave the same on every run.
+        const offset = Math.floor(Math.random() * 9000);
+        const date = new Date(Date.UTC(2000, 0, 1) + offset * 86400000);
+
+        bru.setVar("sessionDate", date.toISOString().slice(0, 10));
+        bru.setVar("runId", String(offset));
+        bru.setVar("batchDateA", new Date(Date.UTC(2000, 0, 1) + (offset - 4) * 86400000).toISOString().slice(0, 10));
+        bru.setVar("batchDateB", new Date(Date.UTC(2000, 0, 1) + (offset - 2) * 86400000).toISOString().slice(0, 10));
+    - type: tests
+      code: |-
+        test("every name resolved to the catalogue", function() {
+          expect(res.body.unresolvedExercises).to.have.lengthOf(0);
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+    - expression: res.body.workoutsCreated
+      operator: eq
+      value: "1"
+    - expression: res.body.workoutsMatched
+      operator: eq
+      value: "0"
+    - expression: res.body.exercisesImported
+      operator: eq
+      value: "3"
+    - expression: res.body.exercisesSkipped
+      operator: eq
+      value: "0"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  The main ingestion path: one workout, three exercises.
+
+  Two things to notice in the response:
+
+  - `"ohp"` resolved to **Overhead Press** and `"Triceps Pushdown"` matched
+    directly, so `unresolvedExercises` is empty.
+  - The exercise-level `"rpe"` on OHP and the pushdown fills the sets that omit
+    their own; the `6x105 @ 9` set keeps its explicit value.
+
+  The pre-request script picks a fresh `sessionDate` for the whole run.

@@ -1,0 +1,36 @@
+info:
+  name: List metrics
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/analytics/metrics"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("e1rm is registered", function() {
+          const e1rm = res.body.find(m => m.key === "e1rm");
+          expect(e1rm).to.deep.equal({ key: "e1rm", displayName: "Estimated 1RM", unit: "lb" });
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  What this server can compute. Today that is one metric — analytics is
+  deliberately a skeleton.
+
+  Adding another means writing one `IWorkoutMetric` class and one line in
+  `Program.cs`. It then appears here and at `/api/analytics/{key}` with no new
+  endpoint and no change to anything calling it.

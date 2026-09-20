@@ -1,0 +1,35 @@
+info:
+  name: Add an alias
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/exercises/{{benchPressId}}/aliases"
+  body:
+    type: json
+    data: |-
+      {
+        "alias": "Comp Bench {{runId}}"
+      }
+
+runtime:
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "204"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  Teaches an exercise another spelling. From now on an import saying
+  `"Comp Bench ..."` resolves straight to Barbell Bench Press instead of
+  creating an unresolved entry.
+
+  This only affects **future** imports. To fix rows already stored under the
+  wrong name, merge instead — that is the next request.

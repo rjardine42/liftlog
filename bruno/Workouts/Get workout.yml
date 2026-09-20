@@ -1,0 +1,56 @@
+info:
+  name: Get workout
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/workouts/{{workoutId}}"
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("one workout holds everything logged for that date", function() {
+          expect(res.body.exercises).to.have.lengthOf(4);
+          expect(res.body.exercises.map(e => e.exercise)).to.deep.equal([
+            "Barbell Bench Press", "Overhead Press", "Triceps Pushdown", "Lateral Raise"
+          ]);
+        });
+
+        test("the name as typed is kept alongside the canonical one", function() {
+          const ohp = res.body.exercises.find(e => e.exercise === "Overhead Press");
+          expect(ohp.rawName).to.equal("ohp");
+        });
+
+        test("exercise-level RPE filled the sets that omitted it", function() {
+          const ohp = res.body.exercises.find(e => e.exercise === "Overhead Press");
+          expect(ohp.sets.map(s => s.rpe)).to.deep.equal([8, 8, 9]);
+        });
+
+        test("the appended exercise continued the ordering", function() {
+          expect(res.body.exercises.map(e => e.position)).to.deep.equal([1, 2, 3, 4]);
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  One workout with exercises and sets nested, in logged order.
+
+  Worth looking at in the response:
+
+  - `rawName` keeps what you actually typed (`"ohp"`) next to the resolved
+    `exercise` (`"Overhead Press"`), so normalization is always auditable.
+  - Overhead Press comes back `[8, 8, 9]` — the block-level `rpe: 8` filled the
+    first two sets, the third kept its own value.
+  - `position: 4` is Lateral Raise, added by a later request but ordered after
+    the original three.

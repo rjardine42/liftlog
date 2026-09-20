@@ -1,0 +1,60 @@
+info:
+  name: List workouts
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/workouts?from={{batchDateA}}&to={{sessionDate}}"
+  params:
+    - name: from
+      value: "{{batchDateA}}"
+      type: query
+    - name: to
+      value: "{{sessionDate}}"
+      type: query
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const today = res.body.find(w => w.performedOn === bru.getVar("sessionDate"));
+
+        if (today) {
+          bru.setVar("workoutId", today.id);
+        }
+    - type: tests
+      code: |-
+        test("this run's three workouts are all here", function() {
+          expect(res.body).to.have.lengthOf(3);
+        });
+
+        test("newest first", function() {
+          const dates = res.body.map(w => w.performedOn);
+          expect(dates).to.deep.equal([...dates].sort().reverse());
+        });
+
+        test("the session date has 4 exercises and 11 sets", function() {
+          const today = res.body.find(w => w.performedOn === bru.getVar("sessionDate"));
+          expect(today.exerciseCount).to.equal(4);
+          expect(today.setCount).to.equal(11);
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  Summaries, newest first, with exercise and set counts.
+
+  `from`/`to` are optional — clear them to see everything. Paging is
+  `page` (1-based) and `pageSize` (default 50, max 200).
+
+  Captures `workoutId` for the next request.

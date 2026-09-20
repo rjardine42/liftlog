@@ -1,0 +1,27 @@
+opencollection: 1.0.0
+
+info:
+  name: Workout Logger
+
+request:
+  headers:
+    - name: Content-Type
+      value: application/json
+  scripts:
+    - type: before-request
+      code: |-
+        // Every request that writes uses {{sessionDate}} and {{runId}} so a run never
+        // collides with data a previous run left behind. "Import workout" regenerates
+        // them; this fallback only fires when a request is fired on its own.
+        if (!bru.getVar("sessionDate")) {
+          const offset = Math.floor(Math.random() * 9000);
+          const date = new Date(Date.UTC(2000, 0, 1) + offset * 86400000);
+          bru.setVar("sessionDate", date.toISOString().slice(0, 10));
+          bru.setVar("runId", String(offset));
+        }
+bundled: false
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git

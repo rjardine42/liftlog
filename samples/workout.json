@@ -1,0 +1,34 @@
+{
+  "performedOn": "2026-09-18",
+  "notes": "Push day, felt strong",
+  "exercises": [
+    {
+      "name": "Barbell Bench Press",
+      "notes": "paused reps",
+      "sets": [
+        { "reps": 10, "weight": 95, "isWarmup": true },
+        { "reps": 8, "weight": 185, "rpe": 7.5 },
+        { "reps": 8, "weight": 185, "rpe": 8 },
+        { "reps": 6, "weight": 195, "rpe": 9 }
+      ]
+    },
+    {
+      "name": "ohp",
+      "rpe": 8,
+      "sets": [
+        { "reps": 8, "weight": 95 },
+        { "reps": 8, "weight": 95 },
+        { "reps": 6, "weight": 105, "rpe": 9 }
+      ]
+    },
+    {
+      "name": "Triceps Pushdown",
+      "rpe": 8.5,
+      "sets": [
+        { "reps": 12, "weight": 50 },
+        { "reps": 12, "weight": 50 },
+        { "reps": 10, "weight": 60 }
+      ]
+    }
+  ]
+}

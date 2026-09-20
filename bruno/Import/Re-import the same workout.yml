@@ -1,0 +1,83 @@
+info:
+  name: Re-import the same workout
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/workouts"
+  body:
+    type: json
+    data: |-
+      {
+        "performedOn": "{{sessionDate}}",
+        "notes": "Push day",
+        "exercises": [
+          {
+            "name": "Barbell Bench Press",
+            "sets": [
+              { "reps": 10, "weight": 95, "isWarmup": true },
+              { "reps": 8, "weight": 185, "rpe": 7.5 },
+              { "reps": 6, "weight": 195, "rpe": 9 }
+            ]
+          },
+          {
+            "name": "ohp",
+            "rpe": 8,
+            "sets": [
+              { "reps": 8, "weight": 95 },
+              { "reps": 8, "weight": 95 },
+              { "reps": 6, "weight": 105, "rpe": 9 }
+            ]
+          },
+          {
+            "name": "Triceps Pushdown",
+            "rpe": 8.5,
+            "sets": [
+              { "reps": 12, "weight": 50 },
+              { "reps": 12, "weight": 50 },
+              { "reps": 10, "weight": 60 }
+            ]
+          }
+        ]
+      }
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("each skip says why", function() {
+          expect(res.body.skipped).to.have.lengthOf(3);
+          res.body.skipped.forEach(s => expect(s.reason).to.equal("Already logged for this date."));
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: "200"
+    - expression: res.body.workoutsCreated
+      operator: eq
+      value: "0"
+    - expression: res.body.workoutsMatched
+      operator: eq
+      value: "1"
+    - expression: res.body.exercisesImported
+      operator: eq
+      value: "0"
+    - expression: res.body.exercisesSkipped
+      operator: eq
+      value: "3"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: true
+
+docs: |-
+  **Idempotency.** The same payload again: the workout is matched rather than
+  duplicated, and all three exercises are skipped because dedupe is on
+  exercise + date.
+
+  This is what makes re-running an import safe — send a corrected file again and
+  only the new material lands.
