@@ -1,0 +1,31 @@
+# Runs the tests on every pull request into main. Deliberately separate from the
+# deploy workflow: nothing here can reach Azure, so a PR can never deploy.
+
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+# A new push to the same PR cancels the run it replaces.
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Test
+        run: dotnet test --configuration Release
