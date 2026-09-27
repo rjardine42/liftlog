@@ -25,11 +25,14 @@ cd bruno && npx @usebruno/cli run --env Local -r
 
 Every request sends `X-Api-Key: {{apiKey}}`. Locally the API runs without a key
 (Development skips the check), so the **Local** environment leaves `apiKey`
-blank. To hit Azure, add an environment in Bruno with `baseUrl` set to the app's
-default domain and `apiKey` set to the key, marked secret so Bruno keeps it out
-of the files in this folder.
+blank. To hit Azure, create a **Prod** environment in Bruno with `baseUrl` set
+to the app's default domain and `apiKey` set to the key.
+`environments/Prod.yml` is gitignored because Bruno writes the key into it in
+plain text unless the variable is marked **Secret**.
 
-That points the collection at real data; see the next section.
+Prod is real data. Fire the read requests one at a time; do not run the whole
+collection against it, because the Import and Exercises folders write workouts and
+merge exercises.
 
 ## It writes real data
 
