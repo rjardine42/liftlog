@@ -65,4 +65,9 @@ jobs:
           app-name: 'workout-logger-backend'
           slot-name: 'Production'
           package: .
+          # Wipe wwwroot before copying. Without it, files from older deploys
+          # linger and can stop the app starting (a stray test-project
+          # runtimeconfig.json once made Azure fall back to its placeholder).
+          # Safe because the database lives in /home, outside wwwroot.
+          clean: true
           
