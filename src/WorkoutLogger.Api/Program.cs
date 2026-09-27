@@ -1,3 +1,4 @@
+using WorkoutLogger.Api.Common;
 using WorkoutLogger.Api.Features.Analytics;
 using WorkoutLogger.Api.Features.Analytics.Metrics;
 using WorkoutLogger.Api.Features.Exercises;
@@ -28,6 +29,8 @@ builder.Services.AddOpenApi();
 var app = builder.Build();
 
 app.Services.GetRequiredService<DatabaseInitializer>().Initialize();
+
+app.UseApiKey();
 
 if (app.Environment.IsDevelopment())
 {

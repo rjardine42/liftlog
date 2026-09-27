@@ -29,7 +29,11 @@ public sealed class DatabaseInitializer
 
         using (var pragma = connection.CreateCommand())
         {
-            pragma.CommandText = "PRAGMA journal_mode = WAL;";
+            // Not WAL: its shared-memory index is unsafe on network filesystems,
+            // and on Azure App Service /home is an SMB share. A single user never
+            // needs WAL's concurrent readers. journal_mode is stored in the file,
+            // so this also switches back a database that was created in WAL mode.
+            pragma.CommandText = "PRAGMA journal_mode = DELETE;";
             pragma.ExecuteNonQuery();
         }
 

@@ -1,7 +1,7 @@
 # Workout Logger — Backend
 
 A small .NET 10 backend for logging workouts to SQLite and reading the cleaned
-data back out. No frontend, no auth, single user, runs locally.
+data back out. No frontend, single user, one shared API key.
 
 The priority is **clean ingestion**. Analytics is deliberately a skeleton with
 one working metric and a seam to add more.
@@ -14,6 +14,12 @@ dotnet run --project src/WorkoutLogger.Api
 
 Listens on `http://localhost:5204` and creates `workouts.db` next to the project
 on first start. Point it elsewhere with `ConnectionStrings__WorkoutDb`.
+
+Every route except `/health` requires an `X-Api-Key` header matching the
+`API_KEY` setting. Outside Development the app refuses to start without one;
+in Development an unset key turns the check off. `API_KEY` is read from
+configuration like any other setting (environment variable, app setting on
+Azure) — a `.env` file is not loaded.
 
 ```bash
 dotnet test

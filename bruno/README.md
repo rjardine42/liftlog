@@ -21,6 +21,16 @@ folder by folder — they are ordered to tell a story.
 cd bruno && npx @usebruno/cli run --env Local -r
 ```
 
+## Against the deployed API
+
+Every request sends `X-Api-Key: {{apiKey}}`. Locally the API runs without a key
+(Development skips the check), so the **Local** environment leaves `apiKey`
+blank. To hit Azure, add an environment in Bruno with `baseUrl` set to the app's
+default domain and `apiKey` set to the key, marked secret so Bruno keeps it out
+of the files in this folder.
+
+That points the collection at real data; see the next section.
+
 ## It writes real data
 
 These requests import workouts into whatever database the API is pointed at.

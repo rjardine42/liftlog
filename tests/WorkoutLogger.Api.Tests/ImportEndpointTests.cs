@@ -220,14 +220,55 @@ public sealed class ImportEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task The_same_exercise_twice_in_one_workout_is_a_validation_error()
     {
-        var workout = Workout("2026-10-01",
+        var workout = Workout("2026-01-12",
             Exercise("Barbell Bench Press", Set(8, 185)),
             Exercise("bench", Set(6, 195)));
 
         var response = await _client.PostAsJsonAsync("/api/workouts", workout);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(0, await CountSetsOnAsync("2026-10-01"));
+        Assert.Equal(0, await CountSetsOnAsync("2026-01-12"));
+    }
+
+    [Fact]
+    public async Task Two_aliases_of_one_exercise_in_a_workout_are_rejected_not_dropped()
+    {
+        // "bench" and "bench press" normalize differently, so only resolution
+        // shows they are the same lift. The second must not be skipped silently.
+        var workout = Workout("2026-01-14",
+            Exercise("Bench", Set(5, 185)),
+            Exercise("Bench Press", Set(3, 205)));
+
+        var response = await _client.PostAsJsonAsync("/api/workouts", workout);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        Assert.Equal(["exercises[1].name"], problem!.Errors.Keys);
+
+        using var connection = _factory.OpenConnection();
+
+        Assert.Equal(0, await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Workout WHERE PerformedOn = '2026-01-14';"));
+    }
+
+    [Theory]
+    [InlineData("""{"exercises":[{"name":"Squat","sets":[{"reps":5}]}]}""", "performedOn")]
+    [InlineData("""{"performedOn":"2026-01-16","exercises":[{"sets":[{"reps":5}]}]}""", "exercises[0].name")]
+    [InlineData("""{"performedOn":"2026-01-16","exercises":[{"name":"Squat","sets":[{"weight":100}]}]}""", "exercises[0].sets[0].reps")]
+    [InlineData("""{"performedOn":"2026-01-16","exercises":[null]}""", "exercises[0]")]
+    [InlineData("""{"performedOn":"2026-01-16","exercises":[{"name":"Squat","sets":[null]}]}""", "exercises[0].sets[0]")]
+    public async Task Missing_fields_are_a_validation_error_not_a_server_error(string json, string expectedKey)
+    {
+        var response = await _client.PostAsync("/api/workouts",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+        Assert.Contains(expectedKey, problem!.Errors.Keys);
+
+        Assert.Equal(0, await CountSetsOnAsync("2026-01-16"));
     }
 
     private async Task<ImportResult> PostWorkoutAsync(WorkoutDto workout) =>

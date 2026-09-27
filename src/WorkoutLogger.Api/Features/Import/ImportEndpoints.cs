@@ -55,6 +55,13 @@ public static class ImportEndpoints
             return Results.ValidationProblem(validation.ToProblemDictionary(trimPrefix));
         }
 
-        return Results.Ok(await importService.ImportAsync(request, ct));
+        try
+        {
+            return Results.Ok(await importService.ImportAsync(request, ct));
+        }
+        catch (ImportRejectedException ex)
+        {
+            return Results.ValidationProblem(ex.Validation.ToProblemDictionary(trimPrefix));
+        }
     }
 }

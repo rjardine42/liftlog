@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Dapper;
+using FluentValidation.Results;
 using Microsoft.Data.Sqlite;
 using WorkoutLogger.Api.Features.Exercises;
 using WorkoutLogger.Api.Common;
@@ -23,10 +24,16 @@ namespace WorkoutLogger.Api.Features.Import;
 /// </list>
 /// The whole request runs in one transaction: validation has already passed at
 /// this point, so any failure here is unexpected and should leave nothing behind.
+/// The one check left for this stage is two names in a workout that resolve to
+/// the same exercise, which needs the database; it throws
+/// <see cref="ImportRejectedException"/> and rolls everything back.
 /// </remarks>
 public sealed class WorkoutImportService
 {
     private const string DefaultSource = "manual";
+
+    public const string DuplicateExerciseMessage =
+        "The same exercise appears more than once in this workout. Combine the sets into a single entry.";
 
     private readonly IDbConnectionFactory _connectionFactory;
 
@@ -52,9 +59,11 @@ public sealed class WorkoutImportService
         var imported = 0;
         var skipped = new List<SkippedExercise>();
         var unresolved = new List<UnresolvedExercise>();
+        var rejections = new List<ValidationFailure>();
 
-        foreach (var workout in workouts)
+        for (var w = 0; w < workouts.Count; w++)
         {
+            var workout = workouts[w];
             var performedOn = workout.PerformedOn!.Trim();
             var label = string.IsNullOrWhiteSpace(workout.Label) ? null : workout.Label.Trim();
 
@@ -74,9 +83,23 @@ public sealed class WorkoutImportService
             var position = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
                 ImportSql.SelectMaxPosition, new { workoutId }, transaction, cancellationToken: ct));
 
-            foreach (var exercise in workout.Exercises!)
+            var exerciseIdsInWorkout = new HashSet<long>();
+
+            for (var e = 0; e < workout.Exercises!.Count; e++)
             {
+                var exercise = workout.Exercises[e];
                 var resolved = await resolver.ResolveAsync(exercise.Name!, ct);
+
+                // Two aliases of one lift ("Bench", "Bench Press") pass validation
+                // but would collide here, and the second would be silently skipped
+                // as "already logged". Reject instead, as the validator does for
+                // identical names. Keyed like a validator failure.
+                if (!exerciseIdsInWorkout.Add(resolved.ExerciseId))
+                {
+                    rejections.Add(new ValidationFailure(
+                        $"Workouts[{w}].Exercises[{e}].Name", DuplicateExerciseMessage));
+                    continue;
+                }
 
                 if (resolved.WasCreatedUnresolved)
                 {
@@ -100,6 +123,12 @@ public sealed class WorkoutImportService
                 await InsertSetsAsync(connection, transaction, workoutExerciseId.Value, exercise, now, ct);
                 imported++;
             }
+        }
+
+        if (rejections.Count > 0)
+        {
+            // Disposing the uncommitted transaction rolls back everything above.
+            throw new ImportRejectedException(new ValidationResult(rejections));
         }
 
         await connection.ExecuteAsync(new CommandDefinition(
@@ -191,4 +220,11 @@ public sealed class WorkoutImportService
         var json = JsonSerializer.Serialize(request);
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
     }
+}
+
+/// <summary>A batch that passed validation but was rejected once exercise names were resolved.</summary>
+public sealed class ImportRejectedException(ValidationResult validation)
+    : Exception("The import was rejected after exercise names were resolved.")
+{
+    public ValidationResult Validation { get; } = validation;
 }

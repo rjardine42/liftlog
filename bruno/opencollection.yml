@@ -7,6 +7,8 @@ request:
   headers:
     - name: Content-Type
       value: application/json
+    - name: X-Api-Key
+      value: "{{apiKey}}"
   scripts:
     - type: before-request
       code: |-

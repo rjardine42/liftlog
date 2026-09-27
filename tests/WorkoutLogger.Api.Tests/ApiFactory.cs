@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using WorkoutLogger.Api.Common;
 using WorkoutLogger.Api.Persistence;
 
 namespace WorkoutLogger.Api.Tests;
@@ -23,6 +24,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:WorkoutDb", $"Data Source={_databasePath}");
+
+        // Blank the API key so a key exported in the developer's shell cannot
+        // switch the check on under every other test. ApiKeyTests sets its own.
+        builder.UseSetting(ApiKeyAuthentication.SettingName, "");
     }
 
     public SqliteConnection OpenConnection() =>
