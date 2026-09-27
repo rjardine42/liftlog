@@ -488,3 +488,6 @@ $RECYCLE.BIN/
 
 # Bruno CLI output
 bruno/results.json
+
+# Bruno environments that hold real keys stay local
+bruno/environments/Prod.yml
